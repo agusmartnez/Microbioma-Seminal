@@ -423,15 +423,6 @@ plot(1:56,pred$x,col=target.col, main = "Discriminant Analysis Results")
 
 ```
 
-```{r}
-
-for ( i in 1:dim(data)[1]) {
-  boxplot(linear.da$scaling*data[i,])
-}
-colnames((data))
-
-```
-
 # logistic regresion
 
 ```{r}
@@ -444,53 +435,3 @@ glm.model <- glm(Target~., family = binomial(link = logit),  data = logit.data.t
 summary(glm.model)
 ```
 
-```{r}
-
-for ( i in 1:dim(data)[1]) {
-  boxplot(glm.model$coefficients*logit.data[i,])
-}
-colnames((data))
-```
-## PCA2
-
-```{r}
-data.pca2 <- prcomp(logit.data[,c(1,10:14)], scale = F) 
-summary(data.pca2)
-print(data.pca2)
-get_pca(data.pca2)
-
-# Scree plot
-plot(data.pca2)
-```
-
-```{r}
-fviz_eig(data.pca2, addlabels = TRUE, ylim = c(0, 50))
-fviz_screeplot(data.pca2) 
-fviz_screeplot(data.pca2, addlabels = TRUE, ylim = c(0, 50))
-
-var <- get_pca_var(data.pca)
-var
-```
-
-
-### With PCA2
-```{r}
-pca.data2 <- data.pca2$x[,1:3]
-GMM_BIC2 <- Mclust(pca.data2,G=2:3)
-
-#plot(GMM_BIC, what="BIC")
-plot(GMM_BIC2,what="density", add=T)
-par(mfrow=c(1,1))
-```
-
-
-```{r}
-n.pca2 <- dim(pca.data2)[2]
-for (i in 1:(n.pca2-1)) {
-  for (j in (i+1):q) {
-    X <- pca.data2[,c(i,j)]
-    plot(GMM_BIC2,what="density", dimens=c(i,j))
-    points(X,col=target.col)
-  }
-}
-```
