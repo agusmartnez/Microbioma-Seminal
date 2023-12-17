@@ -1,0 +1,496 @@
+---
+title: "Bits"
+author: "Eloi Campeny, Agustina Martinez, Maria Paraskeva, Akram Tafze"
+date: "2023-12-15"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load libraries
+```{r}
+library(sm)
+library(stops)
+library(mclust)
+library(Rtsne)
+library(MASS)
+library(LaplacesDemon)
+library(factoextra)
+library(FactoMineR)
+library(stats)
+library(corrplot)
+
+```
+
+# PHYLUM LEVEL
+
+## Load Data
+
+```{r}
+data <- read.csv("1.csv",header = T, sep=";", dec = ",") #Phylum level
+
+data <- data[,2:15]
+tf.data <- data/100
+scaled.data <- scale(data)
+data <- data.frame(data)
+target <- c(rep(1,42),rep(0,14))
+target.col <- c(rep(1,42),rep(2,14))
+data.target <- data
+data.target$Target <- target
+```
+
+```{r}
+n <- dim(data)[2]
+
+for (i in 1:n) {
+  x <- data[,i]
+  plot(density(x))
+}
+```
+
+```{r}
+n <- dim(scaled.data)[2]
+
+for (i in 1:n) {
+  x <- scaled.data[,i]
+  plot(density(x))
+  points(x,(1-target)*0.4+0.2,col=target.col)
+}
+```
+
+```{r}
+for (i in 1:n) {
+  for (j in i:n) {
+    plot(data[,c(i,j)],col=target.col)
+  }
+}
+```
+
+```{r}
+summary(data)
+summary(data[1:42,])
+summary(data[43:56,])
+```
+
+## Transformations
+
+```{r}
+
+tdata <- t(data[1:n])
+epsilon <- 1e-6
+tf.data <- data/100
+tf.data <- tf.data * (1-epsilon) + epsilon/2
+max(tf.data) == 1
+summary(tf.data)
+```
+
+```{r}
+
+log.data <- log(tf.data)
+divergence.data <- log(tf.data*dim(tf.data)[2]) # x/ 1/ncols
+logit.data <- logit(tf.data)
+
+```
+
+
+```{r}
+for (i in 1:n) {
+  for (j in i:n) {
+    X <- log.data[,c(i,j)]
+    plot(X,col=target.col)
+    sm::sm.density(X, 0.25*(c(sd(X[,1]), sd(X[,2]))),display="slice", props=c(25,50,75,90),add=TRUE)
+  }
+}
+```
+
+```{r}
+for (i in 1:n) {
+  for (j in i:n) {
+    X <- divergence.data[,c(i,j)]
+    plot(X,col=target.col)
+    sm::sm.density(X, 0.25*(c(sd(X[,1]), sd(X[,2]))),display="slice", props=c(25,50,75,90),add=TRUE)
+  }
+}
+```
+
+```{r}
+for  (i in 1:n) {
+  x <- logit.data[,i]
+  plot(density(x))
+}
+```
+
+```{r}
+for (i in 1:n) {
+  for (j in i:n) {
+    X <- logit.data[,c(i,j)]
+    plot(X,col=target.col)
+    sm::sm.density(X, 0.25*(c(sd(X[,1]), sd(X[,2]))),display="slice", props=c(25,50,75,90),add=TRUE)
+  }
+}
+```
+
+## Reduce dimentionality
+
+### PCA
+
+```{r}
+##### CHECKING DATA
+str(data)
+summary(data)
+row.names(data)
+R <- cor(data)
+corrplot(R, method = "number",number.cex = 0.75)
+
+```
+
+```{r}
+data.pca <- prcomp(logit.data, scale = FALSE) 
+summary(data.pca)
+print(data.pca)
+get_pca(data.pca)
+
+# Scree plot
+plot(data.pca)
+
+```
+
+### EXPLORING PCA RESULTS
+
+```{r}
+get_eigenvalue(data.pca)
+fviz_eig(data.pca)
+get_pca_ind(data.pca) ## get_pca_var(dec.pca): Extract the results for individuals and variables, respectively.
+fviz_pca_ind(data.pca) ## fviz_pca_var(dec.pca): Visualize the results individuals and variables, respectively.
+fviz_pca_biplot(data.pca) ## Make a biplot of individuals and variables.
+```
+
+
+```{r}
+fviz_eig(data.pca, addlabels = TRUE, ylim = c(0, 50))
+fviz_screeplot(data.pca) 
+fviz_screeplot(data.pca, addlabels = TRUE, ylim = c(0, 40))
+
+var <- get_pca_var(data.pca)
+var
+
+```
+
+
+```{r}
+# Coordinates
+head(var$coord)
+## PARA VER TODOS COORDINATES
+(var$coord)
+# Cos2: quality on the factore map
+head(var$cos2)
+# Contributions to the principal components
+head(var$contrib)
+
+###Correlation circle
+fviz_pca_var(data.pca, col.var = "black")
+
+
+###NOTES:
+#    Positively correlated variables are grouped together.
+#    Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants).
+#    The distance between variables and the origin measures the quality of the variables on the factor map. 
+#     Variables that are away from the origin are well represented on the factor map.
+
+```
+
+
+```{r}
+# Quality of representation
+head(var$cos2, 4)
+corrplot(var$cos2, is.corr=FALSE)
+fviz_cos2(data.pca, choice = "var", axes = 1:2)
+
+```
+
+
+```{r}
+# NOTES:
+# A high cos2 indicates a good representation of the variable on the principal component. In this case the variable is positioned close to the circumference of the correlation circle.
+# A low cos2 indicates that the variable is not perfectly represented by the PCs. In this case the variable is close to the center of the circle.
+
+fviz_pca_var(data.pca, col.var = "cos2",gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),repel = TRUE) # Avoid text overlapping
+fviz_pca_var(data.pca, alpha.var = "cos2")
+
+
+
+####Contributions of variables to PCs
+
+####NOTES: Variables that are correlated with PC1 (i.e., Dim.1) and PC2 (i.e., Dim.2) are the most important in explaining the variability in the data set.
+##### Variables that do not correlated with any PC or correlated with the last dimensions are variables with low contribution and might be removed to simplify the overall analysis.
+#####The larger the value of the contribution, the more the variable contributes to the component. 
+
+head(var$contrib, 4)
+corrplot(var$contrib, is.corr=FALSE)
+# Contributions of variables to PC1
+fviz_contrib(data.pca, choice = "var", axes = 1, top = 10)
+# Contributions of variables to PC2
+fviz_contrib(data.pca, choice = "var", axes = 2, top = 10)
+
+####IMPORTANT
+fviz_contrib(data.pca, choice = "var", axes = 1:2, top = 10)
+fviz_pca_var(data.pca, col.var = "contrib",gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+
+```
+
+
+```{r}
+
+# local continuity meta criteria function
+LCMC <- function(D1,D2,Kp){
+  D1 <- as.matrix(D1)
+  D2 <- as.matrix(D2)
+  n <- dim(D1)[1]
+  N.Kp.i <- numeric(n)
+  for (i in 1:n){
+    N1.i <- sort.int(D1[i,],index.return = TRUE)$ix[1:Kp]
+    N2.i <- sort.int(D2[i,],index.return = TRUE)$ix[1:Kp]
+    N.Kp.i[i] <- length(intersect(N1.i, N2.i))
+  }
+  N.Kp<-mean(N.Kp.i)
+  M.Kp.adj <- N.Kp/Kp - Kp/(n-1)
+  
+  return(list(N.Kp.i=N.Kp.i, M.Kp.adj=M.Kp.adj))
+}
+```
+
+### Local MDS
+
+```{r}
+
+dist <- dist(logit.data)
+
+k <- 5
+Kp <- 5
+q <- 7
+
+tau <- c(.1,.2,.5,.75,1)
+#tau.LCMDS <-numeric(length(tau))
+
+#LCMDS <- matrix(0,nrow=length(q),ncol=length(tau))
+tau.LCMDS <-numeric(length(tau))
+
+for (j in 1:length(tau)){
+  conf0 <- stats::cmdscale(dist, k=q)
+  fit <- lmds(as.matrix(dist), init = conf0, k = k, tau = tau[j], ndim = q, itmax=100)
+  D2.k.tau <- fit$confdist
+  tau.LCMDS[j] <- LCMC(dist,D2.k.tau,Kp)$M.Kp.adj
+}
+
+
+#ij.max <- arrayInd(which.max(LCMDS),.dim=dim(LCMDS))
+#q.max <- q[ij.max[1]] 
+tau.max <- tau[which.max(tau.LCMDS)]
+
+print(paste0("tau.max=",tau.max))
+
+conf0 <- stats::cmdscale(dist, k=q)
+LocalMDS.max <- lmds(as.matrix(dist), init = conf0, k = k, tau = tau.max, ndim = q, itmax=1000)
+```
+
+```{r}
+LMDS.data <- LocalMDS.max$conf
+```
+
+
+## clustering
+### Gaussian Mixture Models with BIC
+
+#### With PCA
+```{r}
+pca.data <- data.pca$x[,1:5]
+GMM_BIC <- Mclust(pca.data,G=2:4,modelNames ="VVV")
+
+plot(GMM_BIC, what="BIC")
+plot(GMM_BIC,what="density", add=T)
+par(mfrow=c(1,1))
+```
+
+
+```{r}
+pca.dim <- dim(pca.data)[2]
+for (i in 1:(pca.dim-1)) {
+  for (j in (i+1):pca.dim) {
+    X <- pca.data[,c(i,j)]
+    plot(GMM_BIC,what="density", dimens=c(i,j))
+    points(X,col=target.col)
+  }
+}
+
+```
+
+
+#### With LMDS
+```{r}
+GMM_BIC <- Mclust(LMDS.data,G=2:4,modelNames ="VVV")
+
+plot(GMM_BIC, what="BIC")
+plot(GMM_BIC,what="density", add=T)
+par(mfrow=c(1,1))
+```
+
+
+```{r}
+for (i in 1:(q-1)) {
+  for (j in (i+1):q) {
+    X <- LMDS.data[,c(i,j)]
+    plot(GMM_BIC,what="density", dimens=c(i,j))
+    points(X,col=target.col)
+  }
+}
+
+```
+
+## Transposed
+
+### k-means clustering
+
+```{r}
+set.seed(3103)
+
+#determining the optimal number of clusters with Elbow, Silhouhette, and Gap statistic methods
+fviz_nbclust(tdata, kmeans, method = "wss") + geom_vline(xintercept = 4, linetype = 2)+  labs(subtitle = "Elbow method")
+fviz_nbclust(tdata, kmeans, method = "silhouette")+ labs(subtitle = "Silhouette method")
+
+k <- 2
+kmeans_result <- kmeans(tdata, centers = k, nstart = 20)
+
+fviz_cluster(object = kmeans_result, data = tdata, show.clust.cent = TRUE,
+             ellipse.type = "euclid", star.plot = TRUE, repel = TRUE) + labs(title = "Resultados clustering K-means") +
+  theme_bw() +  theme(legend.position = "none")
+
+k <- 3
+kmeans_result3 <- kmeans(tdata, centers = k, nstart = 20)
+
+fviz_cluster(object = kmeans_result3, data = tdata, show.clust.cent = TRUE,
+             ellipse.type = "euclid", star.plot = TRUE, repel = TRUE) + labs(title = "Resultados clustering K-means") +
+  theme_bw() +  theme(legend.position = "none")
+
+k <- 4
+kmeans_result <- kmeans(tdata, centers = k, nstart = 20)
+
+fviz_cluster(object = kmeans_result, data = tdata, show.clust.cent = TRUE,
+             ellipse.type = "euclid", star.plot = TRUE, repel = TRUE) + labs(title = "Resultados clustering K-means") +
+  theme_bw() +  theme(legend.position = "none")
+
+
+
+# final model with k=3
+cluster_assignments <- kmeans_result3$cluster
+cluster_centers <- kmeans_result3$centers
+
+# Print the results
+print("Cluster Assignments:")
+print(cluster_assignments)
+
+print("Cluster Centers:")
+print(cluster_centers)
+
+```
+
+### Hierarchical clustering
+
+```{r}
+
+# Calculate the distance matrix using an appropriate method (e.g., Euclidean distance)
+dist_matrix <- dist(tdata, method = "euclidean")
+
+# Perform hierarchical clustering using complete linkage
+hclust_result <- hclust(dist_matrix, method = "complete")
+
+plot(hclust_result, main = "Hierarchical Clustering Dendrogram", sub = NULL, xlab = NULL, cex = 0.8) 
+
+# Cut the dendrogram to get clusters (adjust the height parameter as needed)
+cutree_result <- cutree(hclust_result, h = 300)
+
+print(cutree_result)
+
+```
+
+## ML methods
+
+### Discriminant Analysis
+
+```{r}
+linear.da <- lda(Target~., data.target)
+pred <- predict(linear.da, data)
+plot(1:56,pred$x,col=target.col, main = "Discriminant Analysis Results")
+
+```
+
+```{r}
+
+for ( i in 1:dim(data)[1]) {
+  boxplot(linear.da$scaling*data[i,])
+}
+colnames((data))
+
+```
+
+# logistic regresion
+
+```{r}
+logit.data.t <- data.frame(logit.data)
+logit.data.t$Target <- target
+glm.model <- glm(Target~., family = binomial(link = logit),  data = logit.data.t)
+```
+
+```{r}
+summary(glm.model)
+```
+
+```{r}
+
+for ( i in 1:dim(data)[1]) {
+  boxplot(glm.model$coefficients*logit.data[i,])
+}
+colnames((data))
+```
+## PCA2
+
+```{r}
+data.pca2 <- prcomp(logit.data[,c(1,10:14)], scale = F) 
+summary(data.pca2)
+print(data.pca2)
+get_pca(data.pca2)
+
+# Scree plot
+plot(data.pca2)
+```
+
+```{r}
+fviz_eig(data.pca2, addlabels = TRUE, ylim = c(0, 50))
+fviz_screeplot(data.pca2) 
+fviz_screeplot(data.pca2, addlabels = TRUE, ylim = c(0, 50))
+
+var <- get_pca_var(data.pca)
+var
+```
+
+
+### With PCA2
+```{r}
+pca.data2 <- data.pca2$x[,1:3]
+GMM_BIC2 <- Mclust(pca.data2,G=2:3)
+
+#plot(GMM_BIC, what="BIC")
+plot(GMM_BIC2,what="density", add=T)
+par(mfrow=c(1,1))
+```
+
+
+```{r}
+n.pca2 <- dim(pca.data2)[2]
+for (i in 1:(n.pca2-1)) {
+  for (j in (i+1):q) {
+    X <- pca.data2[,c(i,j)]
+    plot(GMM_BIC2,what="density", dimens=c(i,j))
+    points(X,col=target.col)
+  }
+}
+```
